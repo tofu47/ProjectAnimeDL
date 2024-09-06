@@ -1,6 +1,6 @@
-# ProjectAnimeDL
-bot to upload your video youtube or anime video to Telegram unlimited drive from google drive.
-Making this using chat GPT, im not programmer 
+## ProjectAnimeDL
+1. Bot to upload your Video Youtube or anime video to Telegram unlimited drive, from Google Drive.
+2. I make this bot using chat GPT, im not programmer 
 
 # For linux
 1. sudo apt update
