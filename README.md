@@ -11,4 +11,5 @@
 1. virtualenv -p python VENV"
 2. . ./VENV/bin/activate
 3. pip install -r requirements.txt
-4. python bot.py
+4. put yout token and api on config
+5. python bot.py
