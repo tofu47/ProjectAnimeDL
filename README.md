@@ -4,7 +4,10 @@
 
 # For linux
 1. sudo apt update
-2. sudo apt install ffmpeg
+2. sudo apt upgrade
+3. sudo apt install rar
+4. sudo apt install ffmpeg
+5. pip install --upgrade pip
 
 
 # Command for python
