@@ -3,3 +3,4 @@ gdown
 pyrogram
 TgCrypto
 yt_dlp
+python-telegram-bot
