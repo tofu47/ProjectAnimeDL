@@ -71,20 +71,20 @@ async def handle_resolution_selection(client, callback_query):
         user_selections[callback_query.from_user.id] = resolution
         logger.info(f"Resolusi dipilih oleh {callback_query.from_user.id}: {resolution}")
 
-        # Give user choose resolution
+        # Memberikan respon singkat setelah resolusi dipilih
         await callback_query.answer(f"Resolusi {resolution} dipilih!")
 
-        # Give instruction to user
+        # Memberikan instruksi selanjutnya kepada pengguna
         await callback_query.message.reply(f"Resolusi {resolution} telah dipilih. Kirimkan link YouTube untuk mengunduh video atau playlist.")
     except Exception as e:
         logger.error(f"Error handling resolution selection: {e}")
 
-##Download percent logger
+####Download percent logger
 async def download_progress_hook(d, status_message):
     global last_download_percent
     if d['status'] == 'downloading':
         percent = float(d['_percent_str'].strip('%'))
-        if percent - last_download_percent >= 15: 
+        if percent - last_download_percent >= 10:  # Update setiap 10% kemajuan
             last_download_percent = percent
             speed = d.get('_speed_str', 'N/A')
             eta = d.get('_eta_str', 'N/A')
@@ -96,7 +96,7 @@ async def download_progress_hook(d, status_message):
 @app.on_callback_query(filters.regex(r'^convert_link$'))
 async def handle_convert_link(client, callback_query):
     user_id = callback_query.from_user.id
-    user_modes[user_id] = "convert_link" 
+    user_modes[user_id] = "convert_link"  # Simpan mode "convert_link" untuk pengguna ini
     await callback_query.message.reply("Silakan kirimkan link yang ingin Anda konversi.")
 
 
@@ -120,7 +120,7 @@ async def handle_link(client, message):
         except FloodWait as e:
             logger.warning(f"Terkena FloodWait, menunggu selama {e.x} detik...")
             await asyncio.sleep(e.x)
-            await handle_link(client, message) 
+            await handle_link(client, message)  # Coba ulang setelah menunggu
     
     elif mode == "drive":
         if not is_valid_google_drive_url(message.text):
@@ -132,9 +132,9 @@ async def handle_link(client, message):
         except FloodWait as e:
             logger.warning(f"Terkena FloodWait, menunggu selama {e.x} detik...")
             await asyncio.sleep(e.x)
-            await handle_link(client, message) 
+            await handle_link(client, message)  # Coba ulang setelah menunggu
 
-    # to handle convert link
+    # Bagian ini untuk menangani mode Convert Link
     elif mode == "convert_link":
         await convert_and_reply_link(message)
     
@@ -143,7 +143,7 @@ async def handle_link(client, message):
 
 async def convert_and_reply_link(message):
     try:
-        # To run convert.py script
+        # Jalankan script convert.py dengan subprocess dan link sebagai argumen
         result = subprocess.run(['python3', 'convert.py', message.text], capture_output=True, text=True)
         
         # Dapatkan hasil konversi dari output
@@ -165,7 +165,7 @@ def is_valid_youtube_url(url):
             return 'v' in parse_qs(parsed_url.query)
         elif parsed_url.path.startswith('/shorts/'):
             return True
-        elif parsed_url.path == '/playlist':  # For checking playlist
+        elif parsed_url.path == '/playlist':  # Menambahkan pengecekan untuk playlist
             return 'list' in parse_qs(parsed_url.query)
         elif parsed_url.netloc == 'youtu.be':
             return len(parsed_url.path) > 1
@@ -184,9 +184,10 @@ async def download_and_upload_youtube(message, resolution):
         ydl_opts = {
             'format': f'bestvideo[height<={resolution}]+bestaudio/best',
             'outtmpl': os.path.join(DOWNLOAD_DIR, '%(title)s.%(ext)s'),
-            'noplaylist': True,  # Hanya mengunduh video tunggal
+            'noplaylist': False,  # Hanya mengunduh video tunggal
             'progress_hooks': [lambda d: asyncio.ensure_future(download_progress_hook(d, status_message))],
-            'cookiefile': 'cookies.txt'
+            'cookiefile': 'cookies.txt',
+            'proxy': 'http://16.78.107.209:8888'
         }
         os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
@@ -196,7 +197,7 @@ async def download_and_upload_youtube(message, resolution):
                 for entry in info_dict['entries']:
                     video_file = ydl.prepare_filename(entry)
                     await status_message.edit_text(f"Unduhan {entry['title']} selesai. Menunggu sebelum proses upload...")
-                    await asyncio.sleep(5) # Pause every 5s before uploading
+                    await asyncio.sleep(10)  # Jeda selama 10 detik sebelum upload
                     await status_message.edit_text(f"Memulai proses upload {entry['title']} ke Telegram...")
                     await message.reply_video(
                         video_file,
@@ -221,19 +222,20 @@ async def download_and_upload_youtube(message, resolution):
     except FloodWait as e:
         wait_time = e.x
         logger.warning(f"Terkena FloodWait, menunggu selama {wait_time} detik...")
-        await asyncio.sleep(wait_time) 
-        await download_and_upload_youtube(message, resolution)
+        await asyncio.sleep(wait_time)  # Tunggu selama waktu yang ditentukan
+        await download_and_upload_youtube(message, resolution)  # Coba ulang setelah menunggu
     except Exception as e:
         logger.error(f"Kesalahan saat mengunduh/upload video: {e}")
         await status_message.edit_text(f"Terjadi kesalahan: {e}")
 
 
+# Variabel global untuk melacak persentase terakhir upload
 last_upload_percent = 0
 
 async def upload_progress(current, total, status_message):
     global last_upload_percent
     percent = (current * 100) / total
-    if percent - last_upload_percent >= 15:  # Update every 15%
+    if percent - last_upload_percent >= 15:  # Update setiap 15% kemajuan
         last_upload_percent = percent
         await status_message.edit_text(f"Mengunggah: {percent:.1f}% selesai")
 
@@ -256,7 +258,7 @@ async def download_and_extract_drive(message: Message):
     try:
         status_message = await message.reply("Memulai unduhan dari Google Drive...")
 
-        # Ekstrak ID file from URL
+        # Ekstrak ID file dari URL
         file_id = extract_drive_file_id(message.text)
         if not file_id:
             await status_message.edit_text("ID file Google Drive tidak valid.")
@@ -265,19 +267,18 @@ async def download_and_extract_drive(message: Message):
         # URL unduhan Google Drive
         download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
 
-        # Make sure if the download folder exist, it not make it
+        # Pastikan folder download ada
         os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
         # Gunakan gdown untuk mengunduh file dan dapatkan nama file dari hasil unduhan
-        # Make gdown to download file and take the name it
-        output = os.path.join(DOWNLOAD_DIR, '') 
+        output = os.path.join(DOWNLOAD_DIR, '')  # Tentukan direktori keluaran
         downloaded_file = gdown.download(download_url, output=output, quiet=False)
 
         if not downloaded_file:
             await status_message.edit_text("Gagal mengunduh file dari Google Drive.")
             return
 
-        # To check if the file zip or not, if not .zip directly upload the file to telegram
+        # Cek apakah file adalah ZIP atau RAR dan lakukan ekstraksi
         extracted_folder = os.path.join(DOWNLOAD_DIR, os.path.splitext(os.path.basename(downloaded_file))[0])
 
         if zipfile.is_zipfile(downloaded_file):
@@ -288,7 +289,7 @@ async def download_and_extract_drive(message: Message):
         elif downloaded_file.lower().endswith('.rar'):
             logger.info("File RAR terdeteksi, akan mengextract.")
             try:
-                # using rarfile to extract the .rar
+                # Gunakan rarfile untuk mengekstrak file RAR
                 os.makedirs(extracted_folder, exist_ok=True)
                 with rarfile.RarFile(downloaded_file) as rar:
                     rar.extractall(extracted_folder)
@@ -297,11 +298,11 @@ async def download_and_extract_drive(message: Message):
                 await status_message.edit_text(f"Kesalahan saat mengekstrak file RAR: {e}")
                 return
         else:
-            extracted_folder = downloaded_file 
+            extracted_folder = downloaded_file  # Bukan file yang diekstrak, hanya satu file
 
         await status_message.edit_text(f"Unduhan dan ekstraksi selesai. Mengunggah file ke Telegram...")
 
-        # Upload file and extract to telegram
+        # Unggah file atau folder yang diekstrak ke Telegram
         if os.path.isdir(extracted_folder):
             for root, dirs, files in os.walk(extracted_folder):
                 for file in files:
@@ -320,7 +321,7 @@ async def download_and_extract_drive(message: Message):
 
         await status_message.edit_text("Proses selesai. Semua file telah diunggah.")
 
-        # for the delete the file/folder after upload
+        # Hapus file dan folder setelah diunggah
         if os.path.isdir(extracted_folder):
             shutil.rmtree(extracted_folder)
         else:
@@ -330,22 +331,22 @@ async def download_and_extract_drive(message: Message):
         wait_time = e.x
         logger.warning(f"Terkena FloodWait, menunggu selama {wait_time} detik...")
         await asyncio.sleep(wait_time)
-        # Pause for 5s before upload the file
+        # Jeda tambahan 5 detik sebelum mencoba ulang
         await asyncio.sleep(5)
-        await download_and_extract_drive(message) 
+        await download_and_extract_drive(message)  # Coba ulang setelah menunggu
     except Exception as e:
         logger.error(f"Kesalahan saat mengunduh/mengekstrak file dari Google Drive: {e}")
         await status_message.edit_text(f"Terjadi kesalahan: {e}")
-# Ping The Bot        
+# Ping         
 async def keep_alive():
     while True:
         logger.info("Ping server untuk menjaga sesi tetap hidup.")
-        await asyncio.sleep(300)  # Pause every 5 minutes (300 second)
+        await asyncio.sleep(300)  # Jeda 5 menit (300 detik)
 
-# Run bot
+# Menjalankan bot
 if __name__ == "__main__":
     print("Bot sedang mencoba terhubung ke Telegram...")
     loop = asyncio.get_event_loop()
-    loop.create_task(keep_alive())  # To Keep Alive the bot
+    loop.create_task(keep_alive())  # Jalankan fungsi keep_alive secara bersamaan dengan bot
     app.run()
     print("Bot telah berhenti.")
